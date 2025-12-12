@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Kavalna Solist 주문</title>
+    <style>
+        /* 1. 기본 스타일 */
+        body { font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; margin: 0; padding: 0; background-color: #f0f2f5; color: #333; -webkit-tap-highlight-color: transparent; }
+        
+        /* 2. 상단 헤더 & 탭 */
+        header { background-color: #1a1a1a; color: white; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+        .header-title { padding: 15px; text-align: center; font-size: 1.2rem; font-weight: bold; border-bottom: 1px solid #333; }
+        
+        /* 탭 네비게이션 */
+        .tabs { display: flex; justify-content: space-around; background: #2c2c2c; }
+        .tab-btn { flex: 1; padding: 12px 0; background: none; border: none; color: #888; font-size: 0.95rem; font-weight: bold; cursor: pointer; transition: 0.2s; border-bottom: 3px solid transparent; }
+        .tab-btn.active { color: #fee500; border-bottom: 3px solid #fee500; background-color: #3a3a3a; } /* 카카오 노란색 포인트 */
+
+        /* 3. 메뉴 리스트 */
+        .container { max-width: 800px; margin: 0 auto; padding: 15px; padding-bottom: 100px; }
+        
+        .menu-grid { 
+            display: none; 
+            grid-template-columns: repeat(2, 1fr); 
+            gap: 10px; 
+        }
+        .menu-grid.active { display: grid; }
+
+        @media (min-width: 600px) {
+            .menu-grid { grid-template-columns: repeat(3, 1fr); }
+        }
+
+        .menu-item { 
+            background: white; 
+            border-radius: 8px; 
+            padding: 15px 10px; 
+            text-align: center; 
+            border: 2px solid transparent;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            cursor: pointer;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 80px;
+            word-break: keep-all;
+        }
+
+        .menu-item.selected { border-color: #fee500; background-color: #fffde7; }
+        .menu-name { font-size: 0.95rem; font-weight: 600; line-height: 1.3; }
+        
+        /* 배지 */
+        .badge {
+            position: absolute; top: -8px; right: -8px;
+            background: #d32f2f; color: white;
+            width: 24px; height: 24px; border-radius: 50%;
+            font-size: 0.8rem; display: flex; align-items: center; justify-content: center;
+            font-weight: bold; opacity: 0; transition: 0.2s; transform: scale(0.5);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        .menu-item.selected .badge { opacity: 1; transform: scale(1); }
+
+        /* 4. 하단 주문 바 (카카오 스타일) */
+        .bottom-bar { 
+            position: fixed; bottom: 0; left: 0; right: 0; 
+            background: white; border-top: 1px solid #ddd;
+            padding: 15px; box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+            display: flex; gap: 10px; z-index: 200;
+        }
+
+        .reset-btn {
+            background: #eee; border: none; border-radius: 8px; width: 50px;
+            font-size: 1.2rem; cursor: pointer; color: #555;
+        }
+
+        .order-btn { 
+            flex: 1; 
+            background-color: #fee500; /* 카카오 노란색 */
+            color: #191919; /* 카카오 검은색 텍스트 */
+            border: none; padding: 12px; border-radius: 8px; 
+            font-size: 1.1rem; font-weight: bold; cursor: pointer; 
+        }
+        .order-btn:disabled { background-color: #ccc; color: white; cursor: not-allowed; }
+        .order-btn span { color: #d32f2f; }
+
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="header-title">Menu</div>
+        <nav class="tabs">
+            <button class="tab-btn active" onclick="showTab('alcohol')">주류</button>
+            <button class="tab-btn" onclick="showTab('food')">요리</button>
+            <button class="tab-btn" onclick="showTab('meal')">식사/별미</button>
+            <button class="tab-btn" onclick="showTab('beverage')">음료</button>
+        </nav>
+    </header>
+
+    <div class="container">
+        <div id="tab-alcohol" class="menu-grid active"></div>
+        <div id="tab-food" class="menu-grid"></div>
+        <div id="tab-meal" class="menu-grid"></div>
+        <div id="tab-beverage" class="menu-grid"></div>
+    </div>
+
+    <div class="bottom-bar">
+        <button class="reset-btn" onclick="resetCart()" title="초기화">↻</button>
+        <button class="order-btn" id="order-btn" onclick="sendToKakao()" disabled>
+            메뉴를 선택해주세요
+        </button>
+    </div>
+
+    <script>
+        // ✅ 요청하신 새 링크 적용 완료
+        const KAKAO_CHAT_URL = "https://open.kakao.com/o/gmZoU95h"; 
+
+        const menuData = {
+            'alcohol': [
+                "하이볼", "맥주", "소주", "느린마을 막걸리", "Red Wine", 
+                "Champagne", "さけ(사케)", "Whisky(위스키)", "白酒(백주)"
+            ],
+            'food': [
+                "닭어깨살 양념구이", "우삼겹 숙주볶음", "문어숙회", "고추장찌개", 
+                "고추잡채", "납작만두 오징어무침", "조개탕", "동태전", 
+                "땡초부추전", "월남쌈 육전", "소시지야채볶음", "안심스테이크", 
+                "카나페", "카프레제", "육사시미"
+            ],
+            'meal': [
+                "된장술밥", "김치말이국수", "카레/짜장밥", "계란말이/계란찜", 
+                "햄 볶음밥", "김치 볶음밥", "김치찌개", "라면/떡라면", 
+                "매콤짜파게티", "떡볶이", "오뎅탕", "고추튀김", "마른안주", "아이스크림", "공기밥"
+            ],
+            'beverage': [
+                "제로 콜라/사이다", "데미소다 애플", "자몽/레몬 에이드", "Ice/Hot 아메리카노", 
+                "Ice/Hot 라떼", "Canada 진저에일/토닉워터", "Hot Tea"
+            ]
+        };
+
+        let cart = {}; 
+
+        window.onload = function() {
+            renderCategory('alcohol'); renderCategory('food');
+            renderCategory('meal'); renderCategory('beverage');
+        };
+
+        function renderCategory(categoryKey) {
+            const container = document.getElementById(`tab-${categoryKey}`);
+            menuData[categoryKey].forEach(name => {
+                const el = document.createElement('div');
+                el.className = 'menu-item';
+                el.id = `item-${name}`;
+                el.onclick = () => addItem(name);
+                el.innerHTML = `<div class="menu-name">${name}</div><div class="badge" id="badge-${name}">0</div>`;
+                container.appendChild(el);
+            });
+        }
+
+        function showTab(categoryKey) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.menu-grid').forEach(grid => grid.classList.remove('active'));
+            event.target.classList.add('active');
+            document.getElementById(`tab-${categoryKey}`).classList.add('active');
+            window.scrollTo(0, 0);
+        }
+
+        function addItem(name) {
+            if (!cart[name]) cart[name] = 0;
+            cart[name]++;
+            updateUI(name);
+        }
+
+        function updateUI(name) {
+            const item = document.getElementById(`item-${name}`);
+            const badge = document.getElementById(`badge-${name}`);
+            if (cart[name] > 0) {
+                item.classList.add('selected'); badge.innerText = cart[name];
+            } else {
+                item.classList.remove('selected');
+            }
+            
+            const totalCount = Object.values(cart).reduce((a,b) => a+b, 0);
+            const btn = document.getElementById('order-btn');
+            if (totalCount > 0) {
+                btn.disabled = false;
+                btn.innerHTML = `카톡으로 주문하기 <span>(${totalCount}개)</span>`;
+                btn.style.backgroundColor = "#fee500";
+            } else {
+                btn.disabled = true;
+                btn.innerText = "메뉴를 선택해주세요";
+                btn.style.backgroundColor = "#ccc";
+            }
+        }
+
+        function resetCart() {
+            if(!confirm("선택한 메뉴를 모두 지우시겠습니까?")) return;
+            cart = {};
+            document.querySelectorAll('.menu-item').forEach(el => el.classList.remove('selected'));
+            updateUI(''); 
+        }
+
+        // ★ 카카오톡 전송 기능
+        function sendToKakao() {
+            let orderText = "";
+            let totalCount = 0;
+            const allCategories = ['alcohol', 'food', 'meal', 'beverage'];
+            
+            allCategories.forEach(cat => {
+                let hasItem = false;
+                let catText = "";
+                let catName = "";
+                if(cat === 'alcohol') catName = "주류";
+                else if(cat === 'food') catName = "요리";
+                else if(cat === 'meal') catName = "식사/별미";
+                else catName = "음료";
+                
+                menuData[cat].forEach(name => {
+                    if (cart[name] > 0) {
+                        if (!hasItem) { catText += `\n[${catName}]\n`; hasItem = true; }
+                        catText += `- ${name}: ${cart[name]}개\n`;
+                        totalCount += cart[name];
+                    }
+                });
+                orderText += catText;
+            });
+
+            if (totalCount === 0) return;
+
+            const finalMessage = `[주문 내역]${orderText}\n------------------\n총 ${totalCount}개 주문합니다.`;
+
+            // 1. 클립보드에 복사
+            navigator.clipboard.writeText(finalMessage).then(() => {
+                alert("주문 내역이 복사되었습니다!\n\n열리는 카톡 채팅방에 '붙여넣기'만 해주세요.");
+                // 2. 새 카카오톡 링크로 이동
+                window.location.href = KAKAO_CHAT_URL;
+            }).catch(err => {
+                // 복사 실패 시 수동 링크 이동
+                alert("주문하기 버튼을 눌러 채팅방으로 이동해주세요.");
+                window.location.href = KAKAO_CHAT_URL;
+            });
+        }
+    </script>
+</body>
+</html>
